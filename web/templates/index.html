@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trending Content Manager</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1, h2, h3 {
+            color: #333;
+        }
+        .container {
+            display: flex;
+            flex-direction: row;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .section {
+            flex: 1;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            min-width: 0; 
+        }
+        .search-box {
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+        input {
+            padding: 10px;
+            width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 4px 0 0 4px;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+        .search-button {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 0 4px 4px 0;
+            cursor: pointer;
+            height: 42px;
+        }
+        .search-button:hover {
+            background-color: #45a049;
+        }
+        button {
+            padding: 12px 24px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .results {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            border: 1px solid #eee;
+            border-radius: 4px;
+        }
+        .result-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            transition: background-color 0.2s;
+        }
+        .result-item:hover {
+            background-color: #f0f8ff;
+        }
+        .result-item:last-child {
+            border-bottom: none;
+        }
+        .result-item img {
+            width: 50px;
+            height: 75px;
+            object-fit: cover;
+            margin-right: 10px;
+            border-radius: 3px;
+        }
+        .selected-items {
+            margin-top: 20px;
+        }
+        .trending-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            background-color: #f9f9f9;
+            margin-bottom: 5px;
+            border-radius: 4px;
+            transition: transform 0.2s;
+        }
+        .trending-item:hover {
+            transform: translateX(2px);
+        }
+        .trending-item img {
+            width: 40px;
+            height: 60px;
+            object-fit: cover;
+            margin-right: 10px;
+            border-radius: 3px;
+        }
+        .trending-item .remove {
+            margin-left: auto;
+            color: #e74c3c;
+            cursor: pointer;
+            font-size: 18px;
+            padding: 5px;
+            transition: transform 0.2s;
+        }
+        .trending-item .remove:hover {
+            transform: scale(1.2);
+        }
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            text-align: center;
+            transition: opacity 0.3s;
+        }
+        .success {
+            background-color: #dff0d8;
+            color: #3c763d;
+            border-left: 4px solid #3c763d;
+        }
+        .error {
+            background-color: #f2dede;
+            color: #a94442;
+            border-left: 4px solid #a94442;
+        }
+        /* Loading spinner */
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top-color: #4CAF50;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .loading-text {
+            padding: 20px;
+            text-align: center;
+            color: #666;
+        }
+        /* Responsive styles */
+        @media screen and (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+            .section {
+                margin-bottom: 20px;
+            }
+            button {
+                width: 100%;
+            }
+        }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .refresh-btn {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 5px 10px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        .refresh-btn:hover {
+            background-color: #45a049;
+        }
+        
+        .refresh-btn i {
+            margin-right: 5px;
+        }
+        
+        .trending-item {
+            position: relative;
+        }
+        
+        .trending-controls {
+            display: flex;
+            gap: 5px;
+            margin-left: auto;
+        }
+        
+        .trending-controls button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 5px;
+            transition: transform 0.2s;
+            color: #e74c3c;
+            font-size: 18px;
+        }
+        
+        .trending-controls button:hover {
+            transform: scale(1.2);
+        }
+        /* Add this to your existing styles */
+        .notifications-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 300px;
+            max-width: 80%;
+            z-index: 1000;
+        }
+        
+        .notification {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            margin-bottom: 10px;
+            overflow: hidden;
+            transform: translateX(120%);
+            animation: slide-in 0.3s forwards;
+            position: relative;
+        }
+        
+        .notification.removing {
+            animation: slide-out 0.3s forwards;
+        }
+        
+        @keyframes slide-in {
+            100% { transform: translateX(0); }
+        }
+        
+        @keyframes slide-out {
+            100% { transform: translateX(120%); }
+        }
+        
+        .notification-content {
+            display: flex;
+            align-items: center;
+            padding: 12px 15px;
+        }
+        
+        .notification-icon {
+            margin-right: 15px;
+            font-size: 20px;
+        }
+        
+        .notification-message {
+            flex: 1;
+            font-size: 14px;
+        }
+        
+        .notification-close {
+            cursor: pointer;
+            padding: 5px;
+            margin-left: 10px;
+            color: #aaa;
+            transition: color 0.2s;
+        }
+        
+        .notification-close:hover {
+            color: #555;
+        }
+        
+        .notification-progress {
+            height: 3px;
+            width: 100%;
+            background-color: rgba(0,0,0,0.1);
+        }
+        
+        .notification-progress-bar {
+            height: 100%;
+            width: 100%;
+            transform-origin: left;
+            animation: progress 5s linear forwards;
+        }
+        
+        @keyframes progress {
+            0% { transform: scaleX(1); }
+            100% { transform: scaleX(0); }
+        }
+        
+        .notification.success .notification-icon {
+            color: #4CAF50;
+        }
+        
+        .notification.error .notification-icon {
+            color: #f44336;
+        }
+        
+        .notification.info .notification-icon {
+            color: #2196F3;
+        }
+        
+        .notification.success .notification-progress-bar {
+            background-color: #4CAF50;
+        }
+        
+        .notification.error .notification-progress-bar {
+            background-color: #f44336;
+        }
+        
+        .notification.info .notification-progress-bar {
+            background-color: #2196F3;
+        }
+    </style>
+</head>
+<body>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h1>Trending Content Manager</h1>
+        <button onclick="logout()" style="width: auto; padding: 8px 16px; background-color: #f44336;">
+            <i class="fas fa-sign-out-alt"></i> Logout
+        </button>
+    </div>
+
+    <div id="content" style="display: none;">
+        <div class="container">
+            <div class="section">
+                <h2>Movies</h2>
+                <div class="search-box">
+                    <input type="text" id="movie-search" placeholder="Search for movies...">
+                    <button class="search-button" id="movie-search-btn">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </div>
+                <div id="movie-results" class="results"></div>
+                
+                <div class="section-header">
+                    <h3>Trending Movies</h3>
+                    <button id="refresh-trending-movies" class="refresh-btn">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+                <div id="trending-movies" class="selected-items"></div>
+            </div>
+            
+            <div class="section">
+                <h2>Shows</h2>
+                <div class="search-box">
+                    <input type="text" id="show-search" placeholder="Search for shows...">
+                    <button class="search-button" id="show-search-btn">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </div>
+                <div id="show-results" class="results"></div>
+                
+                <div class="section-header">
+                    <h3>Trending Shows</h3>
+                    <button id="refresh-trending-shows" class="refresh-btn">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+                <div id="trending-shows" class="selected-items"></div>
+            </div>
+        </div>
+        
+        <button id="save-trending">
+            <span id="save-icon"><i class="fas fa-save"></i> Save Trending Configuration</span>
+            <span id="save-loading" style="display: none;"><span class="spinner"></span> Saving...</span>
+        </button>
+        <div id="status" class="status" style="display: none;"></div>
+    </div>
+    
+    <script>
+        // Replace the current DOMContentLoaded event listener with this one
+        document.addEventListener('DOMContentLoaded', async function() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                // Redirect to login page if no token
+                window.location.href = '/login';
+                return;
+            }
+            
+            try {
+                // Verify token validity with server
+                const response = await fetch('/api/v1/auth-check', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    // Token is invalid
+                    localStorage.removeItem('token');
+                    window.location.href = '/login';
+                    return;
+                }
+                
+                // Token is valid, show content
+                document.getElementById('content').style.display = 'block';
+                
+                // Load current trending content
+                await loadTrendingContent();
+            } catch (error) {
+                console.error('Authentication check failed:', error);
+                localStorage.removeItem('token');
+                window.location.href = '/login';
+            }
+        });
+        
+        // Update fetchWithAuth to redirect to login page
+        async function fetchWithAuth(url, options = {}) {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                // Redirect to login page if no token
+                window.location.href = '/login';
+                return null;
+            }
+            
+            // Add Authorization header
+            const headers = options.headers || {};
+            headers['Authorization'] = `Bearer ${token}`;
+            
+            const response = await fetch(url, {...options, headers});
+            
+            if (response.status === 401) {
+                // Token expired or invalid
+                localStorage.removeItem('token');
+                window.location.href = '/login';
+                return null;
+            }
+            
+            return response;
+        }
+        
+        // Add logout function
+        function logout() {
+            localStorage.removeItem('token');
+            window.location.href = '/login';
+        }
+        
+        // Store selected trending items
+        const trendingItems = {
+            movie: [],
+            show: []
+        };
+        
+        // DOM elements
+        const movieSearchInput = document.getElementById('movie-search');
+        const movieSearchBtn = document.getElementById('movie-search-btn');
+        const movieResults = document.getElementById('movie-results');
+        const showSearchInput = document.getElementById('show-search');
+        const showSearchBtn = document.getElementById('show-search-btn');
+        const showResults = document.getElementById('show-results');
+        const saveBtn = document.getElementById('save-trending');
+        const saveIcon = document.getElementById('save-icon');
+        const saveLoading = document.getElementById('save-loading');
+        
+        // Handle search input for movies
+        movieSearchInput.addEventListener('input', debounce(function(e) {
+            if (e.target.value.length >= 2) {
+                searchMedia('movie', e.target.value);
+            } else {
+                movieResults.innerHTML = '';
+            }
+        }, 500));
+        
+        // Handle search button click for movies
+        movieSearchBtn.addEventListener('click', function() {
+            if (movieSearchInput.value.length >= 2) {
+                searchMedia('movie', movieSearchInput.value);
+            }
+        });
+        
+        // Handle Enter key press for movie search
+        movieSearchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && this.value.length >= 2) {
+                searchMedia('movie', this.value);
+            }
+        });
+        
+        // Handle search input for shows
+        showSearchInput.addEventListener('input', debounce(function(e) {
+            if (e.target.value.length >= 2) {
+                searchMedia('show', e.target.value);
+            } else {
+                showResults.innerHTML = '';
+            }
+        }, 500));
+        
+        // Handle search button click for shows
+        showSearchBtn.addEventListener('click', function() {
+            if (showSearchInput.value.length >= 2) {
+                searchMedia('show', showSearchInput.value);
+            }
+        });
+        
+        // Handle Enter key press for show search
+        showSearchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && this.value.length >= 2) {
+                searchMedia('show', this.value);
+            }
+        });
+        
+        // Save trending configuration
+        saveBtn.addEventListener('click', function() {
+            saveTrendingConfiguration();
+        });
+        
+        // Debounce function to limit API calls during typing
+        function debounce(func, wait) {
+            let timeout;
+            return function() {
+                const context = this;
+                const args = arguments;
+                clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    func.apply(context, args);
+                }, wait);
+            };
+        }
+        
+        // Search for media by title
+        async function searchMedia(mediaType, query) {
+            try {
+                // Show loading state
+                const resultsElement = mediaType === 'movie' ? movieResults : showResults;
+                resultsElement.innerHTML = '<div class="loading-text"><span class="spinner"></span> Searching...</div>';
+                
+                // Disable search button
+                const searchBtn = mediaType === 'movie' ? movieSearchBtn : showSearchBtn;
+                searchBtn.disabled = true;
+                
+                const response = await fetchWithAuth(`/api/v1/search/${mediaType}?query=${encodeURIComponent(query)}`);
+                if (!response) return;
+                const data = await response.json();
+                
+                // Re-enable search button
+                searchBtn.disabled = false;
+                
+                if (response.ok) {
+                    displaySearchResults(mediaType, data);
+                } else {
+                    showNotification('error', `Error: ${data.detail || 'Failed to search for content'}`);
+                    resultsElement.innerHTML = '<div class="loading-text">Search failed. Please try again.</div>';
+                }
+            } catch (error) {
+                showNotification('error', `Error: ${error.message}`);
+                const resultsElement = mediaType === 'movie' ? movieResults : showResults;
+                resultsElement.innerHTML = '<div class="loading-text">Search failed. Please try again.</div>';
+                
+                // Re-enable search button
+                const searchBtn = mediaType === 'movie' ? movieSearchBtn : showSearchBtn;
+                searchBtn.disabled = false;
+            }
+        }
+        
+        // Display search results
+        function displaySearchResults(mediaType, results) {
+            const resultsElement = mediaType === 'movie' ? movieResults : showResults;
+            resultsElement.innerHTML = '';
+            
+            if (results.length === 0) {
+                resultsElement.innerHTML = '<div class="loading-text">No results found</div>';
+                return;
+            }
+            
+            results.forEach(item => {
+                const resultItem = document.createElement('div');
+                resultItem.className = 'result-item';
+                
+                // Check if the item is already in trending items
+                const isSelected = trendingItems[mediaType].some(i => i.id === item.id);
+                
+                resultItem.innerHTML = `
+                    <img src="https://image.tmdb.org/t/p/w92${item.poster}" onerror="this.src='https://via.placeholder.com/50x75?text=No+Image'">
+                    <div>
+                        <strong>${item.title}</strong>
+                        ${item.year ? ` (${item.year})` : ''}
+                        <br>
+                        Rating: ${item.vote_average}/10
+                    </div>
+                `;
+                
+                if (!isSelected) {
+                    resultItem.addEventListener('click', function() {
+                        addToTrending(mediaType, item);
+                    });
+                } else {
+                    resultItem.style.opacity = '0.5';
+                    resultItem.style.cursor = 'default';
+                    resultItem.title = 'Already added to trending';
+                }
+                
+                resultsElement.appendChild(resultItem);
+            });
+        }
+        
+        // Add item to trending
+        function addToTrending(mediaType, item) {
+            // Check if the item is already in trending items
+            if (trendingItems[mediaType].some(i => i.id === item.id)) {
+                return;
+            }
+            
+            trendingItems[mediaType].push(item);
+            updateTrendingDisplay(mediaType);
+            
+            // Show feedback
+            showNotification('success', `Added ${item.title} to trending ${mediaType}s`);
+            
+            // Update search results to reflect the change
+            const searchInput = mediaType === 'movie' ? movieSearchInput : showSearchInput;
+            if (searchInput.value.length >= 2) {
+                searchMedia(mediaType, searchInput.value);
+            }
+        }
+        
+        // Remove item from trending
+        function removeFromTrending(mediaType, itemId) {
+            const removedItem = trendingItems[mediaType].find(item => item.id === itemId);
+            trendingItems[mediaType] = trendingItems[mediaType].filter(item => item.id !== itemId);
+            updateTrendingDisplay(mediaType);
+            
+            // Show feedback
+            if (removedItem) {
+                showNotification('success', `Removed ${removedItem.title} from trending ${mediaType}s`);
+            }
+            
+            // Update search results to reflect the change
+            const searchInput = mediaType === 'movie' ? movieSearchInput : showSearchInput;
+            if (searchInput.value.length >= 2) {
+                searchMedia(mediaType, searchInput.value);
+            }
+        }
+        
+        // Update trending display
+        function updateTrendingDisplay(mediaType) {
+            const trendingElement = document.getElementById(`trending-${mediaType}s`);
+            trendingElement.innerHTML = '';
+            
+            if (trendingItems[mediaType].length === 0) {
+                trendingElement.innerHTML = '<p>No items selected</p>';
+                return;
+            }
+            
+            trendingItems[mediaType].forEach(item => {
+                const trendingItem = document.createElement('div');
+                trendingItem.className = 'trending-item';
+                trendingItem.innerHTML = `
+                    <img src="https://image.tmdb.org/t/p/w92${item.poster}" onerror="this.src='https://via.placeholder.com/40x60?text=No+Image'">
+                    <div>
+                        <strong>${item.title}</strong>
+                        ${item.year ? ` (${item.year})` : ''}
+                    </div>
+                    <span class="remove" title="Remove from trending"><i class="fas fa-times"></i></span>
+                `;
+                
+                trendingItem.querySelector('.remove').addEventListener('click', function() {
+                    removeFromTrending(mediaType, item.id);
+                });
+                
+                trendingElement.appendChild(trendingItem);
+            });
+        }
+        
+        // Save trending configuration
+        async function saveTrendingConfiguration() {
+            try {
+                // Show loading state
+                saveIcon.style.display = 'none';
+                saveLoading.style.display = 'inline-block';
+                saveBtn.disabled = true;
+                
+                // Extract just the IDs for the payload
+                const payload = {
+                    movie: trendingItems.movie.map(item => item.id),
+                    show: trendingItems.show.map(item => item.id)
+                };
+                
+                const response = await fetchWithAuth('/api/v1/update_trending', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                if (!response) return;
+                const data = await response.json();
+                
+                // Restore button state
+                saveIcon.style.display = 'inline-block';
+                saveLoading.style.display = 'none';
+                saveBtn.disabled = false;
+                
+                if (response.ok) {
+                    showNotification('success', 'Trending configuration saved successfully!');
+                    
+                    // Refresh trending content to get latest from server
+                    await loadTrendingContent();
+                } else {
+                    showNotification('error', `Error: ${data.detail || 'Failed to save trending configuration'}`);
+                }
+            } catch (error) {
+                // Restore button state
+                saveIcon.style.display = 'inline-block';
+                saveLoading.style.display = 'none';
+                saveBtn.disabled = false;
+                
+                showNotification('error', `Error: ${error.message}`);
+            }
+        }
+        
+        // Show notification message
+        function showNotification(type, message, duration = 5000) {
+            // Create container if it doesn't exist
+            let container = document.getElementById('notifications-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'notifications-container';
+                container.className = 'notifications-container';
+                document.body.appendChild(container);
+            }
+            
+            // Create notification
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            
+            // Determine icon based on type
+            let icon = 'info-circle';
+            if (type === 'success') icon = 'check-circle';
+            if (type === 'error') icon = 'exclamation-circle';
+            
+            // Create notification content
+            notification.innerHTML = `
+                <div class="notification-content">
+                    <div class="notification-icon">
+                        <i class="fas fa-${icon}"></i>
+                    </div>
+                    <div class="notification-message">${message}</div>
+                    <div class="notification-close">
+                        <i class="fas fa-times"></i>
+                    </div>
+                </div>
+                <div class="notification-progress">
+                    <div class="notification-progress-bar"></div>
+                </div>
+            `;
+            
+            // Add to container
+            container.appendChild(notification);
+            
+            // Setup close button
+            const closeBtn = notification.querySelector('.notification-close');
+            closeBtn.addEventListener('click', () => {
+                removeNotification(notification);
+            });
+            
+            // Auto remove after duration
+            setTimeout(() => {
+                removeNotification(notification);
+            }, duration);
+            
+            // Helper function to remove notification with animation
+            function removeNotification(notif) {
+                if (notif.classList.contains('removing')) return;
+                
+                notif.classList.add('removing');
+                notif.addEventListener('animationend', () => {
+                    if (notif.parentNode) {
+                        notif.parentNode.removeChild(notif);
+                    }
+                });
+            }
+            
+            return notification;
+        }
+        
+        // Initialize trending displays
+        updateTrendingDisplay('movie');
+        updateTrendingDisplay('show');
+        
+        // Load trending content from the API
+        async function loadTrendingContent() {
+            try {
+                const response = await fetchWithAuth('/api/v1/trending');
+                if (!response) return;
+                
+                const data = await response.json();
+                
+                // Clear current trending items
+                trendingItems.movie = [];
+                trendingItems.show = [];
+                
+                // Process movies
+                const movies = data.filter(item => item.media_type === 'movie');
+                movies.forEach(movie => {
+                    const processedMovie = {
+                        id: movie.id,
+                        title: movie.title,
+                        poster: movie.poster,
+                        vote_average: movie.vote_average,
+                        year: movie.year,
+                        media_type: 'movie'
+                    };
+                    trendingItems.movie.push(processedMovie);
+                });
+                
+                // Process shows
+                const shows = data.filter(item => item.media_type === 'show');
+                shows.forEach(show => {
+                    const processedShow = {
+                        id: show.id,
+                        title: show.title,
+                        poster: show.poster,
+                        vote_average: show.vote_average,
+                        year: show.year,
+                        media_type: 'show'
+                    };
+                    trendingItems.show.push(processedShow);
+                });
+                
+                // Update display
+                updateTrendingDisplay('movie');
+                updateTrendingDisplay('show');
+                
+                showNotification('success', 'Trending content loaded');
+            } catch (error) {
+                console.error('Error loading trending content:', error);
+                showNotification('error', `Failed to load trending content: ${error.message}`);
+            }
+        }
+        
+        // Refresh trending content
+        async function refreshTrendingContent(mediaType) {
+            try {
+                showNotification('success', `Refreshing trending ${mediaType}s...`);
+                await loadTrendingContent();
+            } catch (error) {
+                showNotification('error', `Failed to refresh trending ${mediaType}s: ${error.message}`);
+            }
+        }
+        
+        // Add event listeners for refresh buttons
+        document.getElementById('refresh-trending-movies').addEventListener('click', function() {
+            refreshTrendingContent('movie');
+        });
+        
+        document.getElementById('refresh-trending-shows').addEventListener('click', function() {
+            refreshTrendingContent('show');
+        });
+        
+        // Update trending display with enhanced controls
+        function updateTrendingDisplay(mediaType) {
+            const trendingElement = document.getElementById(`trending-${mediaType}s`);
+            trendingElement.innerHTML = '';
+            
+            if (trendingItems[mediaType].length === 0) {
+                trendingElement.innerHTML = '<p>No items selected</p>';
+                return;
+            }
+            
+            trendingItems[mediaType].forEach(item => {
+                const trendingItem = document.createElement('div');
+                trendingItem.className = 'trending-item';
+                trendingItem.innerHTML = `
+                    <img src="https://image.tmdb.org/t/p/w92${item.poster}" onerror="this.src='https://via.placeholder.com/40x60?text=No+Image'">
+                    <div>
+                        <strong>${item.title}</strong>
+                        ${item.year ? ` (${item.year})` : ''}
+                        <br>
+                        Rating: ${item.vote_average}/10
+                    </div>
+                    <div class="trending-controls">
+                        <button class="remove-btn" title="Remove from trending"><i class="fas fa-trash"></i></button>
+                    </div>
+                `;
+                
+                trendingItem.querySelector('.remove-btn').addEventListener('click', function() {
+                    removeFromTrending(mediaType, item.id);
+                });
+                
+                trendingElement.appendChild(trendingItem);
+            });
+        }
+    </script>
+    <div class="notifications-container" id="notifications-container"></div>
+</body>
+</html>
