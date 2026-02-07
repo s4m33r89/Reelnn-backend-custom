@@ -37,31 +37,53 @@ bundle_db = BundleDatabase()
 # ===============================
 # HELPERS
 # ===============================
+def is_valid_video(media) -> bool:
+    """Ensure content is a video file, not subs/zip/exe"""
+    if not media:
+        return False
+        
+    mime = getattr(media, "mime_type", "")
+    name = getattr(media, "file_name", "") or ""
+    
+    # 1. Check Mime Type
+    if mime and "video" in mime:
+        return True
+        
+    # 2. Fallback to extension check for Documents
+    video_exts = ('.mkv', '.mp4', '.webm', '.avi', '.mov', '.flv', '.m4v')
+    if name.lower().endswith(video_exts):
+        return True
+        
+    return False
+
 def is_season_pack(title: str) -> bool:
-    """Detect season packs like: S01.480p.WEB-DL..."""
+    """Legacy check for simple season packs"""
     t = title.lower()
     return ".s01." in t and "e01" not in t and "episode" not in t
 
 # ===============================
-# WORKER STARTER (RESTORED)
+# WORKER SYSTEM
 # ===============================
 async def start_workers(update_cache: bool = True):
-    """
-    Initialize worker tasks if they aren't running.
-    Required by plugins/batch.py
-    """
     global worker_tasks
     if worker_tasks:
         return
-        
     LOGGER.info(f"Starting {WORKER_COUNT} video processing workers...")
     for i in range(WORKER_COUNT):
         task = create_task(process_video_queue(update_cache))
         worker_tasks.append(task)
-        LOGGER.info("Started video worker #%d", i + 1)
+
+async def process_video_queue(update_cache: bool):
+    while True:
+        client, message = await message_queue.get()
+        try:
+            await process_video(client, message, update_cache)
+            await sleep(PROCESS_DELAY)
+        finally:
+            message_queue.task_done()
 
 # ===============================
-# CORE PROCESSOR
+# PROCESSOR
 # ===============================
 async def process_video(client: Client, message: Message, update_cache: bool):
     global cache_update_scheduled
@@ -70,9 +92,11 @@ async def process_video(client: Client, message: Message, update_cache: bool):
         if not file:
             return
 
-        # -----------------------------
+        # FILTER: Ignore non-video files (like subtitles, zips inside document channel)
+        if not is_valid_video(file):
+            return
+
         # TITLE RESOLUTION
-        # -----------------------------
         if config.USE_CAPTION:
             title = message.caption or message.text or ""
         else:
@@ -81,7 +105,7 @@ async def process_video(client: Client, message: Message, update_cache: bool):
         title = remove_redandent(title)
 
         # ===============================
-        # BUNDLE / SEASON PACK HANDLING
+        # BUNDLE / EPISODE PACK HANDLING
         # ===============================
         if is_bundle(title) or is_season_pack(title):
             LOGGER.info(f"Processing Bundle: {title}")
@@ -110,33 +134,34 @@ async def process_video(client: Client, message: Message, update_cache: bool):
                         "release_date": show.get("first_air_date"),
                         "season": [],
                     }
-                    # Upsert Show (Save if not exists)
+                    
                     if not show_db.find_show_by_id(show["tmdb_id"]):
                         show_db.insert_show(show_data)
                     else:
-                        # Optional: Update existing show data if needed
                         show_db.upsert_show(show_data)
                         
                     show_id = show["tmdb_id"]
-                    LOGGER.info(f"Bundle linked to show_id={show_id}")
                 else:
                     LOGGER.warning(f"TMDB search failed for: '{search_title}'")
             except Exception as e:
                 LOGGER.exception(f"Bundle TMDB resolution failed: {e}")
 
-            # Generate File Hash
+            # FILE DETAILS
             file_unique_id = getattr(file, "file_unique_id", None)
             file_hash = file_unique_id[:6] if file_unique_id else None
+            file_size = getattr(file, "file_size", 0)
 
-            # Save Bundle
+            # SAVE BUNDLE
             bundle_db.upsert_bundle({
                 "title": title,
                 "show_id": show_id,
                 "season": bundle_info.get("season"),
                 "episode_range": bundle_info.get("episode_range") or "FULL SEASON",
                 "file_id": file.file_id,
-                "file_unique_id": file_unique_id, # Save unique ID
-                "file_hash": file_hash,           # Save Hash
+                "file_unique_id": file_unique_id, 
+                "file_hash": file_hash,           
+                "size": file_size,                 # ADDED SIZE
+                "file_name": getattr(file, "file_name", "Unknown"), # ADDED NAME
                 "chat_id": message.chat.id,
                 "msg_id": message.id,
                 "is_bundle": True,
@@ -144,23 +169,19 @@ async def process_video(client: Client, message: Message, update_cache: bool):
                 "note": bundle_info.get("note", "Auto-detected")
             })
 
-            status_msg = f"📦 Season / Bundle detected\nTitle: `{title}`\nSeason: {bundle_info.get('season')}"
-            status_msg += f"\n✅ Linked to Show ID: {show_id}" if show_id else "\n⚠️ TMDB lookup failed (Saved without Show ID)"
-            status_msg += f"\n🔑 Hash: `{file_hash}`"
+            status_msg = f" Bundle Detected\nTitle: `{title}`\nRange: {bundle_info.get('episode_range')}"
+            status_msg += f"\n Show ID: {show_id}" if show_id else "\n Unlinked (TMDB fail)"
             
             await send_warning(client, status_msg)
             return
 
         # ===============================
-        # NORMAL METADATA FLOW (EXISTING)
+        # STANDARD MOVIE/EPISODE FLOW
         # ===============================
-        # This logic handles standard movies and episodes using your original get_content_details
         result = await get_content_details(title, client, message)
         
         if not result or not result.get("success"):
-            # Only warn if it really failed (sometimes get_content_details might return None if filtered)
-            if result and not result.get("success"):
-                await send_warning(client, f"Metadata failed:\n{title}")
+            # Optional: Log failed metadata if needed
             return
 
         media_details = result["data"]
@@ -168,10 +189,10 @@ async def process_video(client: Client, message: Message, update_cache: bool):
 
         if media_type == "movie":
             res = movie_db.upsert_movie(media_details)
-            await send_info(client, f"🎬 Movie {res['status']}: {media_details.get('title')}")
+            await send_info(client, f" Movie {res['status']}: {media_details.get('title')}")
         elif media_type == "show":
             res = show_db.upsert_show(media_details)
-            await send_info(client, f"📺 Show {res['status']}: {media_details.get('title')}")
+            await send_info(client, f" Show {res['status']}: {media_details.get('title')}")
 
         if config.POST_UPDATES:
             create_task(auto_poster(client, message, media_details, media_type))
@@ -187,39 +208,18 @@ async def process_video(client: Client, message: Message, update_cache: bool):
         LOGGER.exception("Processing failed")
         await send_error(client, f"Processing failed: {str(e)}", e)
 
-# ===============================
-# WORKER LOOP
-# ===============================
-async def process_video_queue(update_cache: bool):
-    while True:
-        client, message = await message_queue.get()
-        try:
-            await process_video(client, message, update_cache)
-            await sleep(PROCESS_DELAY)
-        finally:
-            message_queue.task_done()
-
-# ===============================
-# DELAYED CACHE UPDATE
-# ===============================
 async def delayed_cache_update():
     global cache_update_scheduled
     await sleep(CACHE_DELAY)
     await message_queue.join()
-    LOGGER.info("Queue drained - running cache update")
     try:
         await update_all_caches()
     finally:
         cache_update_scheduled = False
 
-# ===============================
-# NEW UPLOAD HANDLER
-# ===============================
 @Client.on_message(filters.chat(config.AUTH_CHATS))
 async def get_video(client: Client, message: Message):
-    # Ensure workers are started
     await start_workers(update_cache=True)
-    
     if message.video or message.document or message.animation:
         await message_queue.put((client, message))
-        LOGGER.info("Queued new upload")
+        LOGGER.info(f"Queued upload from {message.chat.id}")
